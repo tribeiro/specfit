@@ -12,6 +12,7 @@ import scipy.ndimage.filters
 import scipy.interpolate
 import logging
 import scipy.constants
+from scipy.optimize import leastsq
 
 _c_kms = scipy.constants.c / 1.e3  # Speed of light in km s^-1
 DF = -8.0
@@ -38,7 +39,7 @@ Initialize class.
         self.specgrid = [[]] * nspec
 
         # velocity for each component
-        self.vel = np.zeros(nspec)
+        self.vel = np.zeros(nspec)+1.
 
         # scale factor for each component
         self.scale = [[]] * nspec
@@ -110,7 +111,7 @@ component ncomp.
 
         if self.grid_ndim[ncomp] > 0:
             grid = splist[1:self.grid_ndim[ncomp] + 1]
-            gdim = np.zeros(self.grid_ndim[ncomp])
+            gdim = np.zeros(self.grid_ndim[ncomp], dtype=np.int)
             for i in range(len(grid)):
                 gdim[i] = len(np.unique(grid[i]))
             index = np.arange(len(splist[0])).reshape(gdim)
@@ -283,13 +284,17 @@ Calculate model spectra.
 
         # _model = self.template[0][self.ntemp[0]]
 
-        logging.debug('Building model spectra')
+        # logging.debug('Building model spectra')
 
         dopCor = np.sqrt((1.0 + self.vel[0] / _c_kms) / (1. - self.vel[0] / _c_kms))
-        scale = self.scale[0] * self.templateScale[0][self.ntemp[0]]
+        scale = self.scale[0][self.ntemp[0]] * self.templateScale[0][self.ntemp[0]]
 
-        _model = MySpectrum(self.template[0][self.ntemp[0]].x * dopCor,
-                            self.template[0][self.ntemp[0]].flux * scale)
+        # print dopCor, scale, len(self.template[0][self.ntemp[0]].x), len(self.template[0][self.ntemp[0]].flux)
+        # _model = MySpectrum(self.template[0][self.ntemp[0]].x * dopCor,
+        #                     self.template[0][self.ntemp[0]].flux * scale)
+
+        _model = MySpectrum(*MySpectrum(self.template[0][self.ntemp[0]].x * dopCor,
+                            self.template[0][self.ntemp[0]].flux * scale).myResample(self.ospec.x, replace=False))
 
         # logging.debug('Applying instrument signature')
 
@@ -300,10 +305,10 @@ Calculate model spectra.
 
         for i in range(1, self.nspec):
             dopCor = np.sqrt((1.0 + self.vel[i] / _c_kms) / (1. - self.vel[i] / _c_kms))
-            scale = self.scale[i] * self.templateScale[i][self.ntemp[i]]
-
-            tmp = MySpectrum(self.template[i][self.ntemp[i]].x * dopCor,
-                             self.template[i][self.ntemp[i]].flux * scale)
+            scale = self.scale[i][self.ntemp[i]] * self.templateScale[i][self.ntemp[i]]
+            # print dopCor, scale, len(self.template[i][self.ntemp[i]].x), len(self.template[i][self.ntemp[i]].flux)
+            # tmp = MySpectrum(self.template[i][self.ntemp[i]].x * dopCor,
+            #                  self.template[i][self.ntemp[i]].flux * scale)
 
             # logging.debug('Applying instrument signature')
 
@@ -311,7 +316,8 @@ Calculate model spectra.
 
             # tmp.flux = scipy.ndimage.filters.gaussian_filter(tmp.flux,kernel)
 
-            tmp = MySpectrum(*tmp.resample(_model.x, replace=False))
+            tmp = MySpectrum(*MySpectrum(self.template[i][self.ntemp[i]].x * dopCor,
+                             self.template[i][self.ntemp[i]].flux * scale).myResample(self.ospec.x, replace=False))
 
             _model.flux += tmp.flux
 
@@ -324,8 +330,8 @@ Calculate model spectra.
 
         # _model.flux = scipy.ndimage.filters.gaussian_filter(_model.flux,kernel)
 
-        logging.debug('Resampling model spectra')
-        _model = MySpectrum(*_model.myResample(self.ospec.x, replace=False))
+        # logging.debug('Resampling model spectra')
+        # _model = MySpectrum(*_model.myResample(self.ospec.x, replace=False))
         if self._autoprop:
             mflux = np.mean(_model.flux)
             oflux = np.mean(self.ospec.flux)
@@ -493,6 +499,32 @@ Find a suitable scale values for all spectra.
 
         return maxscale, minscale
 
+    ##################################################################
+
+    def fit(self):
+        '''
+Fit spectra with least square fit.
+        '''
+
+        def score(p, x, y):
+            for i in range(self.nspec):
+                # self.vel[i] = p[i*self.nspec]
+                # self.scale[i][self.ntemp[i]] = p[i*self.nspec+1]
+                self.vel[i] = 0.
+                self.scale[i][self.ntemp[i]] = p[i]
+
+            return y-self.modelSpec().flux
+
+        # pres, flag = leastsq(score, [self.vel[0], self.scale[0][self.ntemp[0]],
+        #                              self.vel[1], self.scale[1][self.ntemp[1]]],
+        #                      args=(self.ospec.x, self.ospec.flux))
+        pres, flag = leastsq(score, [self.scale[0][self.ntemp[0]],
+                                     self.scale[1][self.ntemp[1]]],
+                             args=(self.ospec.x, self.ospec.flux))
+
+        return pres
+
+
 
 ######################################################################
 
@@ -515,7 +547,7 @@ class MySpectrum(spec.Spectrum):
         newy2 =scipy.interpolate.splev(newx,tck)
         '''
 
-        kernel = np.median(newx[1:] - newx[:-1]) / np.median(self.x[1:] - self.x[:-1])  # *2.0 #/2./np.pi
+        kernel = np.median(newx[1:] - newx[:-1]) / np.median(self.x[1:] - self.x[:-1]) #*4.0 #/2./np.pi
 
         newflux = scipy.ndimage.filters.gaussian_filter1d(self.flux, kernel)
 

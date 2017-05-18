@@ -10,7 +10,7 @@ from StringIO import StringIO
 import logging
 import scipy.constants
 from astropysics import spec
-from specfit import SpecFit
+from specfit.lib.specfit import SpecFit
 
 _c_kms = scipy.constants.c / 1.e3  # Speed of light in km s^-1
 

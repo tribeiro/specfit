@@ -3,7 +3,7 @@ from distutils.core import setup
 setup(
     name='specfit',
     version='0.0.1',
-    packages=['specfit', 'specfit.lib'],
+    packages=['specfit', 'specfit.lib', 'specfit.lib.modelfactory'],
     scripts=['scripts/specfitMC.py'],
     url='http://github.com/astroufsc/specfit',
     license='GPL v2',
