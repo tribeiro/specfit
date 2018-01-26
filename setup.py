@@ -4,7 +4,7 @@ setup(
     name='specfit',
     version='0.0.1',
     packages=['specfit', 'specfit.lib', 'specfit.lib.modelfactory'],
-    scripts=['scripts/specfitMC.py', 'scripts/consolidate_res.py'],
+    scripts=['scripts/specfitMC.py', 'scripts/consolidate_res.py', 'scripts/coelho2npy.py'],
     url='http://github.com/astroufsc/specfit',
     license='GPL v2',
     author='Tiago Ribeiro',
